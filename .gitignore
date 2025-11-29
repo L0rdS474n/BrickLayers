@@ -1,3 +1,4 @@
 bricklayers_log.txt
 sample_brick/*.gcode
 bricklayers_error_log.txt
+sample_brick_output/
