@@ -47,6 +47,14 @@ Edit the **"Post processing scripts"** section in your slicer.
 - PyPy3 (installed locally):<br>
 ```/Users/YourName/.pyenv/versions/pypy3/bin/pypy3 /Volumes/3DPrinting/Scripts/bricklayers.py -startAtLayer 3 -extrusionMultiplier 1.05 -enabled 1;```
 
+### **Bambu Lab Studio (H2D / Multi-nozzle)**
+- Add the full command (Python interpreter + `bricklayers.py` path + your flags) to **Post-processing scripts** in the latest Bambu Lab Studio.
+- The script now keeps independent extruder state per `T` tool, so dual-nozzle/H2D and AMS multi-filament jobs stay in sync when Bambu inserts tool changes.
+- XYZ/F positioning remains global during tool swaps—only the extrusion axis and retraction parameters are per tool—so machine coordinates never jump when the slicer changes nozzles.
+- A minimal example for Linux:<br>
+```/usr/bin/python3 /path/to/bricklayers.py -enabled 1```<br>
+Windows follows the same pattern as the examples above—just point to your Python install and script location.
+
 ### **Wall Generator** and **Walls printing order**:
 In "Quality", "Walls printing order" be sure you select **"Inner/Outer"** - this is very important for the right detection of the Loops 'Depth':
 

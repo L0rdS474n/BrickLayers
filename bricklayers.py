@@ -176,6 +176,7 @@ class GCodeState(NamedTuple):
     is_retracting: bool
     just_started_extruding: bool
     just_stopped_extruding: bool
+    tool: int
 
 
 class GCodeFeatureState(NamedTuple):
@@ -570,7 +571,12 @@ class GCodeSimulator:
     It uses `__slots__` to minimize memory overhead, and make it efficient for parsing large G-code files.
     """
 
-    __slots__ = ('x', 'y', 'z', 'e', 'f', 'retracted', 'width', 'absolute_positioning', 'relative_extrusion', 'is_moving', 'is_extruding', 'is_retracting', 'just_started_extruding', 'just_stopped_extruding', 'moved_in_xy', 'travel_speed', 'wipe_speed', 'retraction_speed', 'detraction_speed', 'retraction_length')
+    __slots__ = (
+        'x', 'y', 'z', 'e', 'f', 'retracted', 'width', 'absolute_positioning', 'relative_extrusion',
+        'is_moving', 'is_extruding', 'is_retracting', 'just_started_extruding', 'just_stopped_extruding',
+        'moved_in_xy', 'travel_speed', 'wipe_speed', 'retraction_speed', 'detraction_speed',
+        'retraction_length', 'tool', 'tool_states'
+    )
 
     DEF_WIDTHS = (";WIDTH:", "; LINE_WIDTH: ")    # tupple, for line.startswith
 
@@ -592,6 +598,8 @@ class GCodeSimulator:
         self.retraction_speed = 0
         self.detraction_speed = 0
         self.retraction_length = 0
+        self.tool = 0
+        self.tool_states = {0: self._snapshot_tool_state()}
 
         if initial_state:
             self.set_state(initial_state)
@@ -613,6 +621,10 @@ class GCodeSimulator:
         if line:
             parts = line.split()
             command = parts[0]
+
+            if command.startswith('T') and len(command) > 1 and command[1:].isdigit() and len(parts) == 1:
+                self._switch_tool(int(command[1:]))
+                return self
 
             if command in ('G0', 'G1', 'G2', 'G3'):
 
@@ -765,7 +777,8 @@ class GCodeSimulator:
             is_extruding=self.is_extruding,
             is_retracting=self.is_retracting,
             just_started_extruding=self.just_started_extruding,
-            just_stopped_extruding=self.just_stopped_extruding
+            just_stopped_extruding=self.just_stopped_extruding,
+            tool=self.tool
         )
 
     def set_state(self, state: GCodeState):
@@ -783,9 +796,10 @@ class GCodeSimulator:
         self.is_moving = state.is_moving
         self.is_extruding = state.is_extruding
         self.is_retracting= state.is_retracting
-        self.is_extruding_and_moving = state.is_extruding_and_moving
         self.just_started_extruding = state.just_started_extruding
         self.just_stopped_extruding = state.just_stopped_extruding
+        self.tool = state.tool
+        self.tool_states[self.tool] = self._snapshot_tool_state()
 
     def reset_state(self):
         self.x, self.y, self.z, self.e, self.f, self.retracted, self.width = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
@@ -794,14 +808,46 @@ class GCodeSimulator:
         self.is_moving = False
         self.is_extruding = False
         self.is_retracting = False
-        self.is_extruding_and_moving = False
         self.just_started_extruding = False
         self.just_stopped_extruding = False
-        self.travel_speed = 0   
+        self.travel_speed = 0
         self.wipe_speed = 0
         self.retraction_speed = 0
         self.detraction_speed = 0
         self.retraction_length = 0
+        self.tool = 0
+        self.tool_states = {0: self._snapshot_tool_state()}
+
+    def _snapshot_tool_state(self):
+        return {
+            "e": self.e,
+            "retracted": self.retracted,
+            "retraction_length": self.retraction_length,
+            "retraction_speed": self.retraction_speed,
+            "detraction_speed": self.detraction_speed,
+        }
+
+    def _restore_tool_state(self, state):
+        self.e = state.get("e", 0.0)
+        self.retracted = state.get("retracted", 0.0)
+        self.retraction_length = state.get("retraction_length", 0)
+        self.retraction_speed = state.get("retraction_speed", 0)
+        self.detraction_speed = state.get("detraction_speed", 0)
+
+    def _switch_tool(self, new_tool):
+        self.tool_states[self.tool] = self._snapshot_tool_state()
+        self.tool = new_tool
+        if new_tool in self.tool_states:
+            self._restore_tool_state(self.tool_states[new_tool])
+        else:
+            self._restore_tool_state({})
+            self.tool_states[new_tool] = self._snapshot_tool_state()
+        self.is_extruding = False
+        self.is_retracting = False
+        self.is_moving = False
+        self.moved_in_xy = False
+        self.just_started_extruding = False
+        self.just_stopped_extruding = False
 
 
 
